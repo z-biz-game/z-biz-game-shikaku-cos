@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#080B16" />
+<title>数间 · Shikaku 矩形分区推理</title>
+<meta name="description" content="Shikaku 数间谜题：把整块盘切成矩形，每块围住一个数字、面积等于它。每局唯一解、每局都能用逻辑围到底，提示只说推得出的那一步。" />
+<!-- Inline icon: without it the browser probes the Pages domain root for /favicon.ico and logs a 404. -->
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23080B16'/%3E%3Crect x='5' y='5' width='13' height='9' rx='2' fill='%232E4269' stroke='%23F2F5FB' stroke-width='1.6'/%3E%3Crect x='18' y='5' width='9' height='14' rx='2' fill='%231F5158' stroke='%23F2F5FB' stroke-width='1.6'/%3E%3Crect x='5' y='14' width='13' height='13' rx='2' fill='%2346356B' stroke='%23F2F5FB' stroke-width='1.6'/%3E%3C/svg%3E" />
+<link rel="stylesheet" href="css/game.css" />
+</head>
+<body>
+<div id="app">
+  <header class="topbar">
+    <div class="brand">
+      <h1>数间</h1>
+      <p class="sub">Shikaku · 矩形分区</p>
+    </div>
+    <div class="top-actions">
+      <button id="btn-notes" class="ghost" type="button" aria-pressed="true">笔记 显</button>
+      <button id="btn-sound" class="ghost" type="button" aria-pressed="true">音效 开</button>
+      <button id="btn-motion" class="ghost" type="button" aria-pressed="false">动效 全</button>
+    </div>
+  </header>
+
+  <main>
+    <section id="view-menu" class="view">
+      <div class="menu-hero">
+        <h2>把整块盘切成矩形，每个数字圈住自己那一块</h2>
+        <p>
+          每一块都是一块长方形，里面恰好有一个数字，格数恰好等于那个数字。
+          数字不告诉你块在哪儿，只告诉你它有多大——边界要靠排除画出来。
+          这里没有运气题：每一局都只有一种切法，也每一局都能靠逻辑围到底。
+        </p>
+      </div>
+
+      <div class="menu-cols">
+        <div class="col">
+          <h3 class="col-title">选一档</h3>
+          <div id="tier-list" class="tiers"></div>
+          <div id="resume-card" class="resume" hidden>
+            <div class="resume-txt">
+              <strong id="resume-name">未完成的牌局</strong>
+              <span id="resume-meta"></span>
+            </div>
+            <button id="btn-resume" class="primary" type="button">继续</button>
+          </div>
+        </div>
+
+        <div class="col">
+          <h3 class="col-title">纪录（同档比：先看不求提示几次，再看步数，最后看时间）</h3>
+          <ul id="record-list" class="records"></ul>
+
+          <h3 class="col-title">你会用到的六条规则</h3>
+          <ol class="rules">
+            <li><b>唯一归属</b>：一格只剩一个数字放得下它，那格就归这个数。</li>
+            <li><b>区域锁定</b>：一个数字只剩一种形状，整块当场围出来。</li>
+            <li><b>全线穿透</b>：它所有可能的放法都盖住同一格，那格必在它里面。</li>
+            <li><b>无处安放</b>：这么放，别处就没地方放了——所以不能这么放。</li>
+            <li><b>必然分域</b>：两格没有任何一种放法能把它们圈在一起，中间画一条线。</li>
+            <li><b>反证</b>：假设这里这么放，推到底会矛盾，假设就反了。</li>
+          </ol>
+        </div>
+      </div>
+    </section>
+
+    <section id="view-game" class="view" hidden>
+      <div class="stage">
+        <div class="stage-head">
+          <span id="stat-name" class="puzzle-name">—</span>
+          <span id="stat-tier" class="chip">—</span>
+          <span id="stat-time" class="chip mono">00:00</span>
+        </div>
+        <div id="board-wrap">
+          <canvas id="board" data-mode="box" role="img" aria-label="数间棋盘：拖动围出一个矩形区域"></canvas>
+          <div id="win-veil" hidden>
+            <div class="win-card">
+              <h3>整块盘切开了</h3>
+              <p id="win-meta"></p>
+              <p id="win-record" class="win-record"></p>
+              <div class="win-actions">
+                <button id="btn-again" class="primary" type="button">再来一局</button>
+                <button id="btn-menu-2" class="ghost" type="button">回选档</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <p id="box-line" class="conflict-line" aria-live="polite"></p>
+      </div>
+
+      <aside class="panel">
+        <div class="modes" role="group" aria-label="落子模式">
+          <button id="btn-mode-box" class="mode" type="button" aria-pressed="true">围块</button>
+          <button id="btn-mode-cut" class="mode" type="button" aria-pressed="false">画线</button>
+        </div>
+        <div class="acts">
+          <button id="btn-hint" class="primary" type="button">提示<span class="mono" id="hint-count">0</span></button>
+          <button id="btn-undo" class="ghost" type="button">撤销</button>
+          <button id="btn-new" class="ghost" type="button">换一局</button>
+          <button id="btn-menu" class="ghost" type="button">回选档</button>
+        </div>
+
+        <div class="stats">
+          <div class="stat"><span>步数</span><b id="stat-moves" class="mono">0</b></div>
+          <div class="stat"><span>提示</span><b id="stat-hints" class="mono">0</b></div>
+          <div class="stat"><span>已围格</span><b id="stat-owned" class="mono">0/0</b></div>
+          <div class="stat"><span>待围格</span><b id="stat-remaining" class="mono">0</b></div>
+          <div class="stat"><span>围好的块</span><b id="stat-regions" class="mono">0/0</b></div>
+          <div class="stat"><span>矛盾</span><b id="stat-problems" class="mono">0</b></div>
+          <div class="stat"><span>难度实测</span><b id="stat-score" class="mono">—</b></div>
+        </div>
+
+        <div class="hint-box">
+          <h4 id="hint-rule">提示理由</h4>
+          <p id="hint-line">按 <b>提示</b> 会说出当前能推的一步，以及它依据哪条规则。</p>
+        </div>
+
+        <div class="legend">
+          <span><i class="sw sw-region"></i>围好的区域</span>
+          <span><i class="sw sw-done"></i>面积与形状都对了</span>
+          <span><i class="sw sw-empty"></i>还没围</span>
+          <span><i class="sw sw-cut"></i>分域笔记</span>
+          <span><i class="sw sw-bad"></i>围不下了</span>
+        </div>
+        <p class="keyhint"><b>拖动</b> 围一块 · <b>点击已围的格</b> 擦掉 · <b>画线</b> 模式点两格之间 · <b>H</b> 提示 · <b>Z</b> 撤销 · <b>M</b> 换模式</p>
+      </aside>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <span>每局唯一解 · 每局可用逻辑围到底 · 提示只给推得出的一步 — 由 <code>tools/verify.sh</code> 在真实浏览器里逐条断言。</span>
+    <button id="btn-reset" class="link" type="button">清空存档</button>
+  </footer>
+</div>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
