@@ -1,0 +1,75 @@
+{
+ "generator": "assets/gen/gen_assets.py",
+ "seed": "0x5cb1e2",
+ "motif": "shikaku 5x5 partition, 8 regions, area == clue",
+ "palette_source": "js/theme.js Palette (regex-extracted)",
+ "cjk_font_for_og": "/System/Library/Fonts/STHeiti Medium.ttc",
+ "files": {
+  "assets/img/paper-256.png": {
+   "bytes": 22195,
+   "w": 256,
+   "h": 256,
+   "sha256": "f7afdf1367cd122c85ebcee57e948fcbc83df81abf9d49e437010da35acb54f6"
+  },
+  "assets/img/spark-64.png": {
+   "bytes": 22342,
+   "w": 256,
+   "h": 64,
+   "sha256": "88b9df45344b36325164ff912098e4befa079e87fd8c83774cf4486e2178cfdc"
+  },
+  "icons/apple-touch-icon.png": {
+   "bytes": 2855,
+   "w": 180,
+   "h": 180,
+   "sha256": "7d4ea0f0d71786278a4977f414df08dbba8fabd0693a5783bd328922f3363fa1"
+  },
+  "icons/favicon-192.png": {
+   "bytes": 2906,
+   "w": 192,
+   "h": 192,
+   "sha256": "c5cc7e53a6147d69ef5317e8734dfea1a3e14c80162e7a23f25ed05acc60b8a9"
+  },
+  "icons/favicon-32.png": {
+   "bytes": 461,
+   "w": 32,
+   "h": 32,
+   "sha256": "141dd6ebb3be3ffa738b5ef1fec589af5cb15ec7b1c81d9a43bea611c9b053d9"
+  },
+  "icons/favicon-48.png": {
+   "bytes": 629,
+   "w": 48,
+   "h": 48,
+   "sha256": "0d093571473d169d68d8ec87ec94d912b0ec8808fe3d85f2d0a9dacc9a715a84"
+  },
+  "icons/icon-1024.png": {
+   "bytes": 14955,
+   "w": 1024,
+   "h": 1024,
+   "sha256": "101835deea3be9917ddd27a63a47b5b0ac9998e39c9158c611a60e8fe2a28c69"
+  },
+  "icons/icon-192.png": {
+   "bytes": 2906,
+   "w": 192,
+   "h": 192,
+   "sha256": "c5cc7e53a6147d69ef5317e8734dfea1a3e14c80162e7a23f25ed05acc60b8a9"
+  },
+  "icons/icon-512.png": {
+   "bytes": 7156,
+   "w": 512,
+   "h": 512,
+   "sha256": "ddbd590460730f0483d8484dccd972c451d09ec2adac9d3233ba70bb3e386734"
+  },
+  "icons/icon-maskable-512.png": {
+   "bytes": 7104,
+   "w": 512,
+   "h": 512,
+   "sha256": "dc351ce13859a03c72024a7ca414422aee9b060913b5dbc8b4c96f06a0546526"
+  },
+  "icons/og.png": {
+   "bytes": 86228,
+   "w": 1200,
+   "h": 630,
+   "sha256": "4a744b456d0a77c9205c6f98a3b51977ea791141f2d02c8c9dc9ab62f6dcc39f"
+  }
+ }
+}
