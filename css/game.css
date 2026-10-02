@@ -9,7 +9,13 @@
 html, body {
   margin: 0;
   min-height: 100%;
-  background: linear-gradient(180deg, var(--bg-top) 0%, var(--bg-bottom) 62%, var(--surface) 100%);
+  /* assets/img/paper-256.png comes from assets/gen/gen_assets.py and is seamless by
+     construction, so the shell and the board sit on one surface instead of two. */
+  background-color: var(--bg-top);
+  background-image: url('../assets/img/paper-256.png'),
+    linear-gradient(180deg, var(--bg-top) 0%, var(--bg-bottom) 62%, var(--surface) 100%);
+  background-repeat: repeat, no-repeat;
+  background-size: 256px 256px, cover;
   background-attachment: fixed;
   color: var(--ink);
   font-family: var(--font-sans);
@@ -256,6 +262,16 @@ main { flex: 1; }
 }
 
 #board[data-mode='cut'] { cursor: col-resize; }
+
+/* The effect layer overlays the board pixel-for-pixel (JS sizes it from view.geo) and is
+     deliberately transparent to input: 拖动 and 画线 belong to the canvas underneath. */
+#fx {
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+  border-radius: var(--radius-card);
+}
 
 .conflict-line {
   margin: 0;

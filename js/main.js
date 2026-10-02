@@ -9,6 +9,7 @@ import { TIERS, tierFor, makePuzzle, generate, solutionOf } from './engine/gener
 import * as Engine from './engine/shikaku.js';
 import { countSolutions } from './engine/count.js';
 import { BoardView } from './render/board.js';
+import { FxLayer } from './render/fx.js';
 import { Game, boxReadout, OPEN } from './ui/game.js';
 
 const VERSION = '1.0.0';
@@ -47,9 +48,19 @@ const el = {
   btnPause: $('#btn-pause'),
   btnFull: $('#btn-full'),
   btnHelp: $('#btn-help'),
+  fx: $('#fx'),
 };
 
 const view = new BoardView(el.canvas);
+const fx = new FxLayer();
+// Relative to document.baseURI so the bitmaps resolve under the Pages path prefix too.
+fx.load({
+  spark: new URL('assets/img/spark-64.png', document.baseURI).href,
+  paper: new URL('assets/img/paper-256.png', document.baseURI).href,
+});
+fx.whenReady('paper', (img) => view.usePaper(img));
+let rafId = 0;
+let lastFrame = 0;
 let game = null;
 let pulse = null;
 let drag = null;
@@ -77,10 +88,39 @@ function availBox() {
   };
 }
 
+// Where an effect belongs on screen, in the same CSS pixels the overlay canvas is drawn in.
+function fxCenterOfBox(box) {
+  const q = view.boxRect(box);
+  return { x: q.x + q.w / 2, y: q.y + q.h / 2, r: Math.max(q.w, q.h) / 2 };
+}
+
+function fxCenterOfCells(cells) {
+  if (!cells || !cells.length) return null;
+  let x = 0;
+  let y = 0;
+  for (const t of cells) {
+    const r = view.cellRect(t);
+    x += r.x + r.size / 2;
+    y += r.y + r.size / 2;
+  }
+  return { x: x / cells.length, y: y / cells.length, r: view.geo.cell };
+}
+
+function sizeFx() {
+  const geo = view.geo;
+  const style = el.fx.style;
+  style.width = `${geo.w}px`;
+  style.height = `${geo.h}px`;
+  el.fx.width = Math.round(geo.w * geo.dpr);
+  el.fx.height = Math.round(geo.h * geo.dpr);
+  el.fx.getContext('2d').setTransform(geo.dpr, 0, 0, geo.dpr, 0, 0);
+}
+
 function draw() {
   if (!game) return;
   const { w, h } = availBox();
   view.resize(game, w, h);
+  sizeFx();
   view.draw(game, {
     pulse,
     preview: drag && game.mode === 'box' ? drag : null,
@@ -217,6 +257,7 @@ function toggleMute() {
 function resetFx() {
   pulse = null;
   drag = null;
+  fx.reset();
 }
 
 function setMode(mode) {
@@ -239,6 +280,8 @@ function showHint(info) {
   el.hintRule.textContent = `规则：${info.rule}`;
   el.hintLine.textContent = info.why;
   pulse = info.kind === 'kill' ? { box: rectBox(info.rid), color: Palette.warn } : { cells: info.cells };
+  const at = info.kind === 'kill' ? fxCenterOfBox(pulse.box) : fxCenterOfCells(info.cells);
+  if (at) fx.pulse(at.x, at.y, at.r, 1600, 'hint');
   const mine = pulse;
   setTimeout(() => {
     if (pulse === mine) pulse = null;
@@ -266,6 +309,12 @@ function onWin() {
   el.winMeta.textContent = `${tierFor(game.puzzle.tier).name} · ${game.w}×${game.h} · ${fmtMs(ms)} · ${game.moves} 步 · 提示 ${game.hints} 次`;
   el.winRecord.textContent = better ? '新纪录：这一局比存档里的更不求人。' : '未破纪录：同档先比提示次数。';
   el.winVeil.hidden = false;
+  const mid = { x: view.geo.x + game.w * view.geo.cell / 2, y: view.geo.y + game.h * view.geo.cell / 2 };
+  fx.pulse(mid.x, mid.y, Math.max(view.geo.w, view.geo.h) / 2.4, 900, 'win');
+  for (let i = 0; i < 5; i++) {
+    const r = view.cellRect(game.board.clueCell[i % game.board.clues]);
+    fx.burst(r.x + r.size / 2, r.y + r.size / 2, 'win', 10);
+  }
   Sound.win();
   renderRecords();
 }
@@ -497,6 +546,8 @@ function commit(box) {
   const res = game.drawBox(box);
   if (!res.ok) {
     boxLine(res.reason);
+    const at = fxCenterOfBox(box);
+    fx.pulse(at.x, at.y, at.r, 420, 'bad');
     if (!res.step) Sound.conflict();
     return null;
   }
@@ -505,6 +556,8 @@ function commit(box) {
     return null;
   }
   boxLine(res.ruled ? '这块合规则，但逻辑上已经放不下了：留意它为什么被排除' : '', false);
+  const at = fxCenterOfBox(res.box || box);
+  fx.burst(at.x, at.y, res.ruled ? 'box' : 'bad', res.ruled ? 12 : 6);
   afterStep('box');
   return res.step;
 }
@@ -603,6 +656,66 @@ $('#btn-reset').addEventListener('click', () => {
   show('menu');
 });
 
+// ---- the frame loop ---------------------------------------------------------------------
+//
+// Everything time-based in this app runs here, off one number: the fixed-step accumulator
+// inside FxLayer. `window.game` mirrors the live state so any probe — the official frame-rate
+// one included — reads the same truth the screen is drawn from instead of guessing at it.
+
+const telemetry = {
+  state: 'menu',
+  phase: 'wait',
+  elapsedMs: 0,
+  animClock: 0,
+  simSteps: 0,
+  particles: 0,
+  moves: 0,
+  hints: 0,
+  owned: 0,
+  remaining: 0,
+  score: 0,
+  cells: null,
+  fx: fx.p,
+};
+
+// Direct field reads, no game.state() allocation: this runs every frame, and an object built
+// 120 times a second to be thrown away is how a puzzle game starts dropping frames.
+function syncTelemetry() {
+  telemetry.state = !game ? 'menu' : paused ? 'paused' : game.status === 'won' ? 'finished' : 'playing';
+  telemetry.elapsedMs = game ? clock() : 0;
+  telemetry.animClock = fx.clock;
+  telemetry.simSteps = fx.simSteps;
+  telemetry.particles = fx.count;
+  if (!game) {
+    telemetry.phase = 'wait';
+    telemetry.cells = null;
+    telemetry.moves = telemetry.hints = telemetry.owned = telemetry.remaining = 0;
+    return;
+  }
+  const d = game.diag;
+  telemetry.phase = drag ? 'drag' : pulse ? 'hint' : game.status === 'won' ? 'celebrate' : 'settle';
+  telemetry.moves = game.moves;
+  telemetry.hints = game.hints;
+  telemetry.owned = d.owned;
+  telemetry.remaining = d.remaining;
+  telemetry.score = game.puzzle.score;
+  telemetry.cells = game.st.owner;
+}
+
+function frame(now) {
+  rafId = requestAnimationFrame(frame);
+  // The first frame carries no delta: pretending it did would invent a 16 ms step that the
+  // 30 Hz tier gets and the 120 Hz tier doesn't.
+  const dt = lastFrame ? Math.min(0.05, (now - lastFrame) / 1000) : 0;
+  lastFrame = now;
+  const live = !el.viewGame.hidden && !paused && !helpOpen;
+  if (live) fx.advance(dt);
+  if (fx.count || fx.ring.life) fx.render(el.fx.getContext('2d'), view.geo.dpr || 1);
+  syncTelemetry();
+}
+
+rafId = requestAnimationFrame(frame);
+
 // Enter/Space 开局 · P 暂停 · R 重开本局 · N 再来一局 · H 提示 · Z 撤销 · K 换模式 ·
 // M 静音 · F 全屏 · ? 教学 · Esc 收掉浮层。M used to be 换模式; it is 静音 here because that is
 // the key every other screen already means by it, and 换模式 moved to K.
@@ -653,7 +766,12 @@ if (/^https?:$/.test(location.protocol) && 'serviceWorker' in navigator) {
   });
 }
 
+// `window.game` is the state surface a frame-rate probe reads: strings for the state machine,
+// scalars that advance with virtual time, and the engine's own per-cell truth.
+window.game = telemetry;
+
 window.shikaku = {
+  fx,
   version: VERSION,
   view,
   get game() {

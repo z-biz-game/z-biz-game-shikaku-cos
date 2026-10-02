@@ -23,6 +23,22 @@ export class BoardView {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d');
     this.geo = { cell: 0, x: 0, y: 0, w: 0, h: 0, dpr: 1 };
+    this.paper = null;
+    this.paperPattern = null;
+  }
+
+  // The generated paper tile is the board's own surface. It goes down *under* the cells, which
+  // are painted opaque over it, so the only place it shows is the pad ring around the grid —
+  // and the pixel assertions that read a cell keep reading exactly one colour.
+  usePaper(img) {
+    this.paper = img;
+    this.paperPattern = null;
+  }
+
+  surfaceFill(ctx) {
+    if (!this.paper) return Palette.surface;
+    if (!this.paperPattern) this.paperPattern = ctx.createPattern(this.paper, 'repeat');
+    return this.paperPattern || Palette.surface;
   }
 
   // The backing buffer is sized in device pixels while every draw call stays in CSS pixels:
@@ -113,7 +129,7 @@ export class BoardView {
     ctx.clearRect(0, 0, geo.w, geo.h);
 
     roundRect(ctx, 0, 0, geo.w, geo.h, Radius.card);
-    ctx.fillStyle = Palette.surface;
+    ctx.fillStyle = this.surfaceFill(ctx);
     ctx.fill();
 
     // Region fills first: an owned cell wears its clue's tint, a region whose area and shape
