@@ -36,28 +36,98 @@ function rleEncode(board) {
 function rleDecode(pairs, len) {
   const b = new Int16Array(len);
   let i = 0;
-  for (let p = 0; p < pairs.length; p += 2) {
+  for (let p = 0; p + 1 < pairs.length; p += 2) {
     const v = pairs[p] - SHIFT;
     const n = pairs[p + 1];
-    for (let k = 0; k < n && i < len; k++) b[i++] = v;
+    // A short run list used to leave the tail at 0, and 0 is *clue 0*, not OPEN (-1): the
+    // resume would silently hand back a board half-"filled" by a region the player never drew.
+    if (i + n > len) return null;
+    for (let k = 0; k < n; k++) b[i++] = v;
   }
-  return b;
+  return i === len ? b : null;
+}
+
+const num = (v, want = 0) => (typeof v === 'number' && Number.isFinite(v) ? v : want);
+const flag = (v, want) => (typeof v === 'boolean' ? v : want);
+const MAX_CELLS = 4096; // 64×64: past this it is not one of our boards
+
+// 两段式解码第一段：只看形状，不看棋盘。任何一条不合格就只丢那一条，游戏照常起。
+function cleanSettings(raw) {
+  const base = defaults().settings;
+  const s = raw && typeof raw === 'object' ? raw : {};
+  return {
+    sound: flag(s.sound, base.sound),
+    reduceMotion: flag(s.reduceMotion, base.reduceMotion),
+    showNotes: flag(s.showNotes, base.showNotes),
+  };
+}
+
+function cleanTotals(raw) {
+  const base = defaults().totals;
+  const t = raw && typeof raw === 'object' ? raw : {};
+  return { solved: Math.max(0, num(t.solved)), hints: Math.max(0, num(t.hints)), ms: Math.max(0, num(t.ms)) };
+}
+
+function cleanBest(raw) {
+  const src = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
+  const out = {};
+  for (const [tier, b] of Object.entries(src)) {
+    if (!b || typeof b !== 'object' || Array.isArray(b)) continue;
+    out[tier] = { ms: Math.max(0, num(b.ms)), hints: Math.max(0, num(b.hints)), moves: Math.max(0, num(b.moves)), size: typeof b.size === 'string' || typeof b.size === 'number' ? b.size : '', at: num(b.at) };
+  }
+  return out;
+}
+
+function cleanResume(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  if (typeof raw.tier !== 'string') return null;
+  if (typeof raw.seed !== 'string' && typeof raw.seed !== 'number') return null;
+  if (!Number.isInteger(raw.cells) || raw.cells <= 0 || raw.cells > MAX_CELLS) return null;
+  if (!Array.isArray(raw.ink) || raw.ink.length % 2 !== 0) return null;
+  const ink = [];
+  for (let p = 0; p < raw.ink.length; p += 2) {
+    const v = raw.ink[p];
+    const n = raw.ink[p + 1];
+    // 值域：SHIFT 后的 clue 索引 0..n，游程 1..255。越界的存档不是存档，是乱码。
+    if (!Number.isInteger(v) || v < 0 || v > MAX_CELLS + 1) return null;
+    if (!Number.isInteger(n) || n <= 0 || n > 255) return null;
+    ink.push(v, n);
+  }
+  return {
+    seed: raw.seed,
+    tier: raw.tier,
+    elapsedMs: Math.max(0, num(raw.elapsedMs)),
+    cells: raw.cells,
+    ink,
+    moves: Math.max(0, num(raw.moves)),
+    hints: Math.max(0, num(raw.hints)),
+    at: num(raw.at),
+  };
+}
+
+function decode(raw) {
+  const parsed = JSON.parse(raw);
+  const src = parsed && typeof parsed === 'object' ? parsed : {};
+  return {
+    settings: cleanSettings(src.settings),
+    best: cleanBest(src.best),
+    resume: cleanResume(src.resume),
+    totals: cleanTotals(src.totals),
+  };
 }
 
 function load() {
+  let raw = null;
   try {
-    const raw = localStorage.getItem(KEY);
-    if (!raw) return defaults();
-    const parsed = JSON.parse(raw);
-    const base = defaults();
-    return {
-      ...base,
-      ...parsed,
-      settings: { ...base.settings, ...(parsed.settings || {}) },
-      totals: { ...base.totals, ...(parsed.totals || {}) },
-    };
+    raw = localStorage.getItem(KEY);
   } catch {
-    return defaults();
+    return defaults(); // 隐私模式 / storage 被禁：默认档照样能玩
+  }
+  if (!raw) return defaults();
+  try {
+    return decode(raw);
+  } catch {
+    return defaults(); // 整档是乱码：丢档，不丢游戏
   }
 }
 
@@ -123,10 +193,18 @@ export const Store = {
     this.save();
   },
 
+  // 第二段：把形状过关的记录解成棋盘。坏在这里也一样——丢这一条续局，不丢这一局之后的启动。
   resume() {
-    const r = this.data.resume;
-    if (!r) return null;
-    return { ...r, board: rleDecode(r.ink, r.cells) };
+    const r = cleanResume(this.data.resume);
+    const board = r ? rleDecode(r.ink, r.cells) : null;
+    if (!board) {
+      if (this.data.resume !== null) {
+        this.data.resume = null;
+        this.save();
+      }
+      return null;
+    }
+    return { ...r, board };
   },
 
   clearResume() {

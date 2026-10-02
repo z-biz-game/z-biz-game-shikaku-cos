@@ -530,5 +530,84 @@ for (const tier of ['trainee', 'apprentice', 'regular']) {
   eq('清档之后没有续局', Store.resume(), null);
 }
 
+// ---- 存档两段式解码：一条乱码只丢那一条，不冻启动 ---------------------------------------
+// Store.resume() 在菜单渲染时就会被调用（js/main.js:464），所以它抛一次就等于整局起不来；
+// 每个样本都重新 import 一次 store.js，走的是真实启动路径上的那次 load()。
+{
+  const junk = [
+    ['整档是字符串', '"垃圾"'],
+    ['整档是数组', '[1,2,3]'],
+    ['整档不是 JSON', '{坏'],
+    ['resume 是字符串', '{"resume":"abc"}'],
+    ['resume 缺 ink', '{"resume":{"seed":"s","tier":"trainee","cells":4}}'],
+    ['ink 长度是奇数', '{"resume":{"seed":"s","tier":"trainee","cells":4,"ink":[1,2,3]}}'],
+    ['ink 游程越界', '{"resume":{"seed":"s","tier":"trainee","cells":4,"ink":[1,256]}}'],
+    ['ink 值是字符串', '{"resume":{"seed":"s","tier":"trainee","cells":4,"ink":["x",2]}}'],
+    ['cells 是负数', '{"resume":{"seed":"s","tier":"trainee","cells":-9,"ink":[1,9]}}'],
+    ['cells 不是整数', '{"resume":{"seed":"s","tier":"trainee","cells":2.5,"ink":[1,2]}}'],
+    ['cells 大得不可能是棋盘', '{"resume":{"seed":"s","tier":"trainee","cells":999999,"ink":[1,2]}}'],
+    ['seed 是对象', '{"resume":{"seed":{},"tier":"trainee","cells":4,"ink":[1,4]}}'],
+    ['游程盖不满棋盘', '{"resume":{"seed":"s","tier":"trainee","cells":9,"ink":[1,4]}}'],
+    ['best 是 null', '{"best":null}'],
+    ['best 里混进一条数字', '{"best":{"trainee":7,"regular":{"ms":5,"hints":0,"moves":3,"size":"5×5"}}}'],
+    ['settings 是数组', '{"settings":[1,2]}'],
+    ['totals 是字符串', '{"totals":"x"}'],
+    ['多了不认识的键', '{"resume":null,"evil":{"a":1},"settings":{"sound":true}}'],
+  ];
+  let sample = 0;
+  let threwCount = 0;
+  for (const [name, raw] of junk) {
+    globalThis.localStorage = { getItem: () => raw, setItem() {}, removeItem() {} };
+    const { Store: S } = await import(`../js/store.js?junk=${sample++}`);
+    let threw = '';
+    try {
+      S.resume();
+      S.best('trainee');
+      S.setting('sound');
+      S.setSetting('sound', false);
+      S.recordSolve(1000, 1);
+      S.recordBest('trainee', { ms: 9, hints: 0, moves: 4, size: '5×5' });
+      S.saveResume({ originSeed: 's', tier: 'trainee', w: 3, h: 2 }, Int16Array.from([-1, 0, 0, 1, 1, -1]), 1500, { moves: 2, hints: 1 });
+      S.resume();
+      S.reset();
+    } catch (e) {
+      threw = `${e && e.name}: ${e && e.message}`;
+    }
+    if (threw) threwCount++;
+    eq(`乱码不冻启动：${name}`, threw, '');
+  }
+  eq('乱码样本全部安全落地', `${sample}/${threwCount}`, `${sample}/0`);
+
+  globalThis.localStorage = { getItem: () => '{"resume":{"seed":"s","tier":"trainee","cells":9,"ink":[1,4]}}', setItem() {}, removeItem() {} };
+  {
+    const { Store: S } = await import('../js/store.js?shortrun');
+    eq('盖不满棋盘的墨被丢掉', S.resume(), null);
+    eq('丢掉之后顺手自愈，不再反复递上坏档', S.data.resume, null);
+  }
+
+  globalThis.localStorage = { getItem: () => '{"resume":null,"evil":{"a":1},"settings":{"sound":true},"__proto":{"x":1}}', setItem() {}, removeItem() {} };
+  {
+    const { Store: S } = await import('../js/store.js?extrakey');
+    eq('不认识的键不会渗进档里', S.data.evil, undefined);
+    eq('白名单只剩该剩的四块', Object.keys(S.data).sort().join(','), 'best,resume,settings,totals');
+    eq('认得的设置照样读得出', S.setting('sound'), true);
+  }
+
+  const good = '{"settings":{"sound":false,"reduceMotion":true,"showNotes":false},"best":{"trainee":{"ms":5000,"hints":1,"moves":3,"size":"5×5","at":7}},"totals":{"solved":2,"hints":1,"ms":9000},"resume":null}';
+  globalThis.localStorage = { getItem: () => good, setItem() {}, removeItem() {} };
+  {
+    const { Store: S } = await import('../js/store.js?good');
+    eq('好档的音效设置照旧生效', S.setting('sound'), false);
+    eq('好档的动画偏好照旧生效', S.setting('reduceMotion'), true);
+    eq('好档的纪录照旧读得出', S.best('trainee').moves, 3);
+    eq('好档的累计照旧读得出', S.data.totals.solved, 2);
+    S.saveResume({ originSeed: 'abc', tier: 'trainee', w: 3, h: 2 }, Int16Array.from([-1, 0, 0, 1, 1, -1]), 1500, { moves: 2, hints: 1 });
+    const r = S.resume();
+    ok('写进去的续局解得回来', !!r && Array.from(r.board).join(',') === '-1,0,0,1,1,-1', r && Array.from(r.board).join(','));
+    eq('续局带着原始种子', r.seed, 'abc');
+    eq('续局带着这一局的代价', `${r.moves}/${r.hints}/${r.elapsedMs}`, '2/1/1500');
+  }
+}
+
 console.log(`\n${pass} 通过 / ${fail} 失败`);
 process.exit(fail ? 1 : 0);
