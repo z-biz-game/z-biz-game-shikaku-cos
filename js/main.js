@@ -482,6 +482,17 @@ applyThemeVars();
 applySettings();
 renderMenu();
 
+// file:// has no service workers — the Electron window loads this same tree off disk, so the
+// protocol is checked rather than the API being called and the rejection swallowed. The URL is
+// resolved against document.baseURI because Pages serves the app under /z-biz-game-shikaku-cos/.
+if (/^https?:$/.test(location.protocol) && 'serviceWorker' in navigator) {
+  addEventListener('load', () => {
+    navigator.serviceWorker.register(new URL('sw.js', document.baseURI).href).catch(() => {
+      /* offline support is an upgrade, not a dependency */
+    });
+  });
+}
+
 window.shikaku = {
   version: VERSION,
   view,
