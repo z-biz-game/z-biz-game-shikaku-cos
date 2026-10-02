@@ -297,9 +297,9 @@
     ck('切模式改无障碍说明', /线/.test($('#board').getAttribute('aria-label')));
     eq('画线按钮亮起', $('#btn-mode-cut').getAttribute('aria-pressed'), 'true');
     eq('围块按钮熄灭', $('#btn-mode-box').getAttribute('aria-pressed'), 'false');
-    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'm', bubbles: true }));
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', bubbles: true }));
     await wait(30);
-    eq('M 键切回围块', $('#board').dataset.mode, 'box');
+    eq('K 键切回围块', $('#board').dataset.mode, 'box');
 
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'h', bubbles: true }));
     await wait(60);
@@ -344,7 +344,59 @@
     $('#btn-resume').click();
     await wait(60);
     ck('继续回到棋局', shown('#view-game'));
-    return report({});
+
+    // ---- 暂停：真的停钟、真的挂起设备、恢复不丢状态 ----
+    const beforePause = A().state();
+    ck('暂停前这一局有花费', beforePause.moves > 0, JSON.stringify({ moves: beforePause.moves, hints: beforePause.hints }));
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'p', bubbles: true }));
+    await wait(80);
+    ck('P 键进入暂停态', A().paused === true);
+    ck('暂停遮罩出现', shown('#pause-veil'));
+    ck('暂停按钮写成按下态', $('#btn-pause').getAttribute('aria-pressed') === 'true');
+    const tPause = text('#stat-time');
+    await wait(1300);
+    eq('暂停期间计时不走', text('#stat-time'), tPause);
+    ck('暂停挂起音频设备', A().soundState().ctx !== 'running', JSON.stringify(A().soundState()));
+    ck('暂停写了花费读数', /步 · 提示/.test(text('#pause-meta')), text('#pause-meta'));
+    $('#btn-resume-run').click();
+    await wait(80);
+    ck('继续关掉暂停遮罩', !shown('#pause-veil'));
+    const afterPause = A().state();
+    eq('恢复不丢步数', afterPause.moves, beforePause.moves);
+    eq('恢复不丢提示', afterPause.hints, beforePause.hints);
+    eq('恢复不丢已围格', afterPause.owned, beforePause.owned);
+
+    // ---- 重开本局：同一张盘，花费与墨水全部归零 ----
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'r', bubbles: true }));
+    await wait(120);
+    const afterRestart = A().state();
+    eq('重开留在同一张盘', afterRestart.originSeed, beforePause.originSeed);
+    eq('重开清零步数', afterRestart.moves, 0);
+    eq('重开清零提示', afterRestart.hints, 0);
+    eq('重开清空已围格', afterRestart.owned, 0);
+    eq('重开把计时放回 00:00', text('#stat-time'), '00:00');
+    ck('重开不留暂停残态', A().paused === false && !shown('#pause-veil'));
+
+    // ---- 静音 / 教学 / 全屏入口 ----
+    const soundWas = A().soundState().enabled;
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'm', bubbles: true }));
+    await wait(60);
+    eq('M 键静音写进存档', JSON.parse(localStorage.getItem('shikaku.save.v1')).settings.sound, !soundWas);
+    eq('M 键静音改按钮文案', text('#btn-sound'), soundWas ? '音效 关' : '音效 开');
+    eq('静音后合成器停在关', A().soundState().enabled, !soundWas);
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'm', bubbles: true }));
+    await wait(40);
+    eq('再按 M 恢复音效', A().soundState().enabled, soundWas);
+    ck('全屏按钮真实存在', !!$('#btn-full'));
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: '?', bubbles: true }));
+    await wait(60);
+    ck('? 键开教学浮层', shown('#help-veil'));
+    ck('教学写了键位', /暂停/.test(text('#help-veil')) && /静音/.test(text('#help-veil')));
+    ck('帮助按钮写成展开态', $('#btn-help').getAttribute('aria-expanded') === 'true');
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    await wait(60);
+    ck('Esc 关掉教学浮层', !shown('#help-veil'));
+    return report({ paused: afterRestart.moves === 0, sound: A().soundState().enabled });
   };
 
   // ---------- hint: every hint must be a step the board actually supports ----------

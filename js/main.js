@@ -41,6 +41,12 @@ const el = {
   winRecord: $('#win-record'),
   wrap: $('#board-wrap'),
   canvas: $('#board'),
+  pauseVeil: $('#pause-veil'),
+  pauseMeta: $('#pause-meta'),
+  helpVeil: $('#help-veil'),
+  btnPause: $('#btn-pause'),
+  btnFull: $('#btn-full'),
+  btnHelp: $('#btn-help'),
 };
 
 const view = new BoardView(el.canvas);
@@ -50,6 +56,9 @@ let drag = null;
 let startedAt = 0;
 let baseElapsed = 0;
 let ticker = 0;
+let paused = false;
+let helpOpen = false;
+let selectedTier = 'trainee';
 
 const clock = () => baseElapsed + (startedAt ? Date.now() - startedAt : 0);
 const running = () => !!startedAt;
@@ -143,6 +152,73 @@ function stopClock() {
   ticker = 0;
 }
 
+// ---- run controls: 暂停 / 重开 / 全屏 / 静音 / 教学 ------------------------------------------
+
+// Pause is a clock stop and an audio stop, not a dim overlay: `stopClock()` folds the running
+// span into baseElapsed, so the timer cannot advance while the player is away, and
+// Sound.suspend() suspends the real AudioContext instead of queueing notes into it.
+function setPaused(v) {
+  const want = !!v;
+  if (want && (!game || game.status === 'won')) return paused;
+  if (want === paused) return paused;
+  paused = want;
+  if (paused) {
+    stopClock();
+    Sound.suspend();
+    drag = null;
+    el.pauseMeta.textContent = `${game.puzzle.tierName} · ${game.w}×${game.h} · ${fmtMs(clock())} · ${game.moves} 步 · 提示 ${game.hints} 次`;
+    el.pauseVeil.hidden = false;
+  } else {
+    Sound.resume();
+    el.pauseVeil.hidden = true;
+    startClock();
+  }
+  syncPauseButton();
+  syncAll();
+  return paused;
+}
+
+function syncPauseButton() {
+  const live = !!game && game.status !== 'won';
+  el.btnPause.disabled = !live || el.viewGame.hidden;
+  el.btnPause.setAttribute('aria-pressed', String(paused));
+  el.btnPause.textContent = paused ? '继续' : '暂停';
+}
+
+function toggleFullscreen() {
+  const node = document.fullscreenElement ? null : document.documentElement;
+  const request = node && (node.requestFullscreen ? node.requestFullscreen.bind(node) : node.webkitRequestFullscreen && node.webkitRequestFullscreen.bind(node));
+  if (!request && !document.fullscreenElement) {
+    boxLine('这个浏览器不让网页自己全屏，用系统菜单的全屏。');
+    return false;
+  }
+  const done = document.fullscreenElement ? document.exitFullscreen() : request();
+  Promise.resolve(done).catch(() => boxLine('全屏被系统拦下了。'));
+  return true;
+}
+
+function setHelp(v) {
+  helpOpen = !!v;
+  el.helpVeil.hidden = !helpOpen;
+  el.btnHelp.setAttribute('aria-expanded', String(helpOpen));
+  if (helpOpen && paused) setPaused(false);
+  return helpOpen;
+}
+
+// Mute goes through the same path as the 音效 button so the two can never disagree about the
+// setting that is written to storage.
+function toggleMute() {
+  Store.setSetting('sound', !Store.setting('sound'));
+  applySettings();
+  if (Store.setting('sound')) Sound.box();
+  return !!Store.setting('sound');
+}
+
+function resetFx() {
+  pulse = null;
+  drag = null;
+}
+
 function setMode(mode) {
   if (!game) return;
   game.mode = mode;
@@ -228,14 +304,17 @@ function undo() {
   return step;
 }
 
-function begin({ tier = 'trainee', seed = null, resume = null } = {}) {
-  const origin = seed || `s${Math.floor(Math.random() * 1e9)}`;
-  const puzzle = makePuzzle(origin, tier);
-  if (!puzzle) return null;
+// One place puts a puzzle on screen, so 换一局 / 继续 / 重开本局 cannot differ by what they
+// forgot to clear: the clock, the gesture buffer, the fx buffers, both veils and the pause flag.
+function mount(puzzle, resume = null) {
   game = new Game(puzzle);
   pulse = null;
   drag = null;
+  resetFx();
+  paused = false;
+  el.pauseVeil.hidden = true;
   el.winVeil.hidden = true;
+  syncPauseButton();
   baseElapsed = 0;
   if (resume) {
     game.moves = resume.moves || 0;
@@ -254,14 +333,34 @@ function begin({ tier = 'trainee', seed = null, resume = null } = {}) {
   return game;
 }
 
+function begin({ tier = 'trainee', seed = null, resume = null } = {}) {
+  const origin = seed || `s${Math.floor(Math.random() * 1e9)}`;
+  const puzzle = makePuzzle(origin, tier);
+  if (!puzzle) return null;
+  selectedTier = puzzle.tier;
+  return mount(puzzle, resume);
+}
+
+// 重开本局: the same board, from nothing. The generator is deterministic on the origin seed, so
+// reusing the puzzle object keeps the run identical without paying for regeneration.
+function restartRun() {
+  if (!game) return null;
+  return mount(game.puzzle, null);
+}
+
 function show(which) {
   el.viewMenu.hidden = which !== 'menu';
   el.viewGame.hidden = which !== 'game';
   if (which === 'menu') {
+    paused = false;
+    el.pauseVeil.hidden = true;
+    Sound.resume();
+    syncPauseButton();
     stopClock();
     renderMenu();
   }
   if (which === 'game') draw();
+  syncPauseButton();
   return which;
 }
 
@@ -291,6 +390,8 @@ function renderTiers() {
       `<span class="tier-note">${TIER_NOTE[t.key] || ''}</span>` +
       `<span class="tier-size mono">${t.w}×${t.h} · 实测 ${t.band[0]}–${t.band[1]}</span>`;
     b.addEventListener('click', () => begin({ tier: t.key }));
+    b.addEventListener('pointerenter', () => { selectedTier = t.key; });
+    b.addEventListener('focus', () => { selectedTier = t.key; });
     el.tiers.appendChild(b);
   }
 }
@@ -344,7 +445,7 @@ function boxLine(text, good) {
 }
 
 function pointerDown(ev) {
-  if (!game || game.status === 'won') return;
+  if (!game || game.status === 'won' || paused || helpOpen) return;
   note = { text: '', good: false };
   ev.preventDefault();
   el.canvas.setPointerCapture?.(ev.pointerId);
@@ -428,6 +529,36 @@ el.canvas.addEventListener('pointercancel', () => {
 });
 el.canvas.addEventListener('contextmenu', (ev) => ev.preventDefault());
 
+// Pointer Events is the preferred path, but a browser without it still has to be playable:
+// these fall back to touch/mouse and hand the same {clientX, clientY} the hit test already
+// scales by getBoundingClientRect. Without this branch, 触屏 Safari-era engines read a click
+// on cell A as a click on cell B because the drag never started.
+if (!('onpointerdown' in el.canvas)) {
+  const point = (ev) => (ev.touches && ev.touches[0]) || (ev.changedTouches && ev.changedTouches[0]) || ev;
+  const asEvent = (ev) => {
+    const p = point(ev);
+    return { clientX: p.clientX, clientY: p.clientY, pointerId: 0, preventDefault: () => ev.preventDefault() };
+  };
+  const down = (ev) => {
+    ev.preventDefault();
+    pointerDown(asEvent(ev));
+  };
+  const move = (ev) => pointerMove(asEvent(ev));
+  const up = () => pointerUp();
+  el.canvas.addEventListener('touchstart', down, { passive: false });
+  el.canvas.addEventListener('touchmove', move, { passive: false });
+  el.canvas.addEventListener('touchend', up);
+  el.canvas.addEventListener('touchcancel', () => {
+    drag = null;
+    syncAll();
+  });
+  el.canvas.addEventListener('mousedown', down);
+  addEventListener('mousemove', (ev) => {
+    if (drag) pointerMove(asEvent(ev));
+  });
+  addEventListener('mouseup', up);
+}
+
 $('#btn-mode-box').addEventListener('click', () => setMode('box'));
 $('#btn-mode-cut').addEventListener('click', () => setMode('cut'));
 $('#btn-hint').addEventListener('click', useHint);
@@ -444,10 +575,17 @@ $('#btn-resume').addEventListener('click', () => {
   if (!r) return;
   begin({ tier: r.tier, seed: r.seed, resume: r });
 });
-$('#btn-sound').addEventListener('click', () => {
-  Store.setSetting('sound', !Store.setting('sound'));
-  applySettings();
-  Sound.box();
+$('#btn-sound').addEventListener('click', toggleMute);
+$('#btn-pause').addEventListener('click', () => setPaused(!paused));
+$('#btn-resume-run').addEventListener('click', () => setPaused(false));
+$('#btn-restart-run').addEventListener('click', () => { setPaused(false); restartRun(); });
+$('#btn-full').addEventListener('click', toggleFullscreen);
+$('#btn-help').addEventListener('click', () => setHelp(!helpOpen));
+$('#btn-help-close').addEventListener('click', () => setHelp(false));
+document.addEventListener('fullscreenchange', () => {
+  const on = !!document.fullscreenElement;
+  el.btnFull.setAttribute('aria-pressed', String(on));
+  el.btnFull.textContent = on ? '退出全屏' : '全屏';
 });
 $('#btn-notes').addEventListener('click', () => {
   Store.setSetting('showNotes', !Store.setting('showNotes'));
@@ -465,12 +603,34 @@ $('#btn-reset').addEventListener('click', () => {
   show('menu');
 });
 
-window.addEventListener('keydown', (ev) => {
+// Enter/Space 开局 · P 暂停 · R 重开本局 · N 再来一局 · H 提示 · Z 撤销 · K 换模式 ·
+// M 静音 · F 全屏 · ? 教学 · Esc 收掉浮层。M used to be 换模式; it is 静音 here because that is
+// the key every other screen already means by it, and 换模式 moved to K.
+function onKeydown(ev) {
   if (ev.target && /input|textarea/i.test(ev.target.tagName)) return;
-  if (ev.key === 'h') useHint();
-  else if (ev.key === 'z') undo();
-  else if (ev.key === 'm') setMode(game && game.mode === 'cut' ? 'box' : 'cut');
-});
+  if (ev.metaKey || ev.ctrlKey || ev.altKey) return;
+  const k = ev.key;
+  const inGame = !el.viewGame.hidden;
+  // A focused button already turns Space into a click; handling it here would fire twice.
+  const onButton = ev.target && ev.target.tagName === 'BUTTON';
+
+  if (k === '?' || k === '/') { ev.preventDefault(); setHelp(!helpOpen); return; }
+  if (k === 'Escape') { if (helpOpen) setHelp(false); else if (drag) { drag = null; syncAll(); } return; }
+  if (!inGame) {
+    if (k === 'Enter' || (k === ' ' && !onButton)) { ev.preventDefault(); begin({ tier: selectedTier }); }
+    return;
+  }
+  if (k === 'h') useHint();
+  else if (k === 'z') undo();
+  else if (k === 'k') setMode(game && game.mode === 'cut' ? 'box' : 'cut');
+  else if (k === 'm') toggleMute();
+  else if (k === 'f') toggleFullscreen();
+  else if (k === 'r') { ev.preventDefault(); restartRun(); }
+  else if (k === 'n') begin({ tier: game ? game.puzzle.tier : selectedTier });
+  else if (k === 'p' || (k === ' ' && !onButton)) { ev.preventDefault(); setPaused(!paused); }
+}
+
+window.addEventListener('keydown', onKeydown);
 
 window.addEventListener('resize', draw);
 document.addEventListener('visibilitychange', () => {
@@ -532,6 +692,18 @@ window.shikaku = {
     return r;
   },
   elapsed: clock,
+  get paused() {
+    return paused;
+  },
+  setPaused,
+  restartRun,
+  toggleFullscreen,
+  toggleMute,
+  setHelp,
+  get helpOpen() {
+    return helpOpen;
+  },
+  soundState: () => Sound.state(),
   state: () => (game ? { ...game.state(), elapsedMs: clock(), mode: game.mode } : null),
   cellAt: (x, y) => (game ? game.cellAt(x, y) : -1),
   ownerOf: (t) => (game ? game.ownerOf(t) : OPEN),

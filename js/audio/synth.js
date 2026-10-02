@@ -5,6 +5,7 @@
 let ctx = null;
 let master = null;
 let enabled = true;
+let held = false; // paused: the context is suspended and nothing may be scheduled into it
 
 function audio() {
   if (typeof AudioContext === 'undefined' && typeof webkitAudioContext === 'undefined') return null;
@@ -19,7 +20,9 @@ function audio() {
       return null;
     }
   }
-  if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+  // Only a wake-up the player asked for: resuming here while muted or paused is how "静音"
+  // turns into an AudioContext that is running and simply not being listened to.
+  if (enabled && !held && ctx.state === 'suspended') ctx.resume().catch(() => {});
   return ctx;
 }
 
@@ -27,8 +30,13 @@ function audio() {
 // a call to this; adding a second voice shape is how a game ends up with sounds that do not
 // belong to the same instrument.
 function tone({ f0, f1 = f0, dur = 0.12, type = 'sine', gain = 0.22, delay = 0 }) {
+  // Muted means no voice nodes are built at all — a zeroed gain would still leave the
+  // scheduler, the context and the CPU running. `held` is pause: writing into a suspended
+  // context is worse than silence, because every note queued while paused fires at once
+  // the moment it resumes.
+  if (!enabled || held) return;
   const ac = audio();
-  if (!ac || !enabled) return;
+  if (!ac) return;
   const t = ac.currentTime + delay;
   const osc = ac.createOscillator();
   const vol = ac.createGain();
@@ -43,11 +51,31 @@ function tone({ f0, f1 = f0, dur = 0.12, type = 'sine', gain = 0.22, delay = 0 }
   osc.stop(t + dur + 0.02);
 }
 
+const halt = () => { if (ctx && ctx.state === 'running') ctx.suspend().catch(() => {}); };
+const wake = () => { if (ctx && ctx.state !== 'running' && ctx.state !== 'closed') ctx.resume().catch(() => {}); };
+
 export const Sound = {
+  // Mute is a teardown, not a volume: the context is suspended so nothing is scheduled,
+  // and tone() refuses to build voice nodes while muted.
   setEnabled(v) {
     enabled = !!v;
+    if (!enabled) halt();
+    else if (!held) wake();
   },
   enabled: () => enabled,
+
+  // Pause holds the instrument: suspend the real AudioContext, and refuse scheduling until
+  // resume(). A note queued while paused would otherwise all play at once on the way back.
+  suspend() {
+    held = true;
+    halt();
+  },
+  resume() {
+    held = false;
+    if (enabled) wake();
+  },
+  // Read by the harness: "is the device actually stopped" cannot be asserted from a flag.
+  state: () => ({ enabled, held, ctx: ctx ? ctx.state : 'none' }),
 
   box() {
     tone({ f0: 520, f1: 880, dur: 0.14, type: 'triangle', gain: 0.2 });

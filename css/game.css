@@ -21,7 +21,13 @@ body { touch-action: manipulation; }
 #app {
   max-width: 1180px;
   margin: 0 auto;
-  padding: var(--space-page) var(--space-page) var(--space-inner);
+  /* viewport-fit=cover is on the meta tag, so these insets are real on a notched iPhone
+     rather than the constant 0 they collapse to without it. */
+  padding:
+    calc(var(--space-page) + env(safe-area-inset-top))
+    calc(var(--space-page) + env(safe-area-inset-right))
+    calc(var(--space-page) + env(safe-area-inset-bottom))
+    calc(var(--space-page) + env(safe-area-inset-left));
   display: flex;
   flex-direction: column;
   gap: var(--space-card);
@@ -372,4 +378,78 @@ main { flex: 1; }
   #view-game { grid-template-columns: 1fr; }
   .menu-cols { grid-template-columns: 1fr; }
   .foot { flex-direction: column; align-items: flex-start; }
+}
+
+/* ---------- touch targets ---------- */
+
+/* 44px is the size a thumb actually hits, not a size that looks big in a mockup. Every
+   interactive thing gets the floor, including the text-style link buttons that would
+   otherwise sit at one line of copy. */
+button,
+.tier,
+.mode,
+.foot button.link {
+  min-height: 44px;
+}
+
+.foot button.link { display: inline-flex; align-items: center; }
+
+.top-actions { flex-wrap: wrap; justify-content: flex-end; }
+
+@media (max-width: 700px) {
+  .topbar { flex-direction: column; align-items: flex-start; }
+  .top-actions { justify-content: flex-start; }
+}
+
+/* ---------- pause / teaching overlays ---------- */
+
+#pause-veil,
+#help-veil {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(8, 11, 22, 0.82);
+  border-radius: var(--radius-card);
+  animation: rise var(--dur-base) var(--ease-ease) both;
+}
+
+#help-veil {
+  position: fixed;
+  z-index: 5;
+  padding: var(--space-page);
+  border-radius: 0;
+}
+
+.pause-card,
+.help-card {
+  text-align: center;
+  padding: var(--space-card);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-card);
+  background: var(--surface-lift);
+  max-width: min(520px, 88%);
+}
+
+.help-card { text-align: left; }
+.pause-card h3, .help-card h3 { margin: 0 0 8px; font-size: 19px; }
+.pause-card p, .help-card p { margin: 0 0 8px; font-size: 13px; color: var(--ink-dim); }
+.pause-note { color: var(--ink-faint) !important; }
+.help-card h4 { margin: 14px 0 6px; font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-faint); }
+.help-card ul { margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.7; color: var(--ink-dim); }
+.help-card .keys li { list-style: none; margin-left: -18px; }
+.help-card b { color: var(--ink); }
+.help-foot { border-top: 1px solid var(--line); padding-top: var(--space-inner); }
+
+/* The OS asking for less motion is the floor: the in-game 动效 toggle can add to it, and this
+   block is what actually stops the transitions the canvas cannot see. */
+@media (prefers-reduced-motion: reduce) {
+  .view,
+  #win-veil,
+  #pause-veil,
+  #help-veil { animation: none; }
+  button,
+  .tier,
+  .mode { transition: none; }
+  button:active { transform: none; }
 }

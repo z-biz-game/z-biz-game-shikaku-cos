@@ -31,6 +31,9 @@
       <p class="sub">Shikaku · 矩形分区</p>
     </div>
     <div class="top-actions">
+      <button id="btn-help" class="ghost" type="button" aria-expanded="false" aria-controls="help-veil">帮助</button>
+      <button id="btn-full" class="ghost" type="button" aria-pressed="false">全屏</button>
+      <button id="btn-pause" class="ghost" type="button" aria-pressed="false" disabled>暂停</button>
       <button id="btn-notes" class="ghost" type="button" aria-pressed="true">笔记 显</button>
       <button id="btn-sound" class="ghost" type="button" aria-pressed="true">音效 开</button>
       <button id="btn-motion" class="ghost" type="button" aria-pressed="false">动效 全</button>
@@ -87,6 +90,17 @@
         </div>
         <div id="board-wrap">
           <canvas id="board" data-mode="box" role="img" aria-label="数间棋盘：拖动围出一个矩形区域"></canvas>
+          <div id="pause-veil" hidden>
+            <div class="pause-card">
+              <h3>暂停中</h3>
+              <p id="pause-meta"></p>
+              <p class="pause-note">计时与音效都停在这里：走开一下不会输掉这一局。</p>
+              <div class="win-actions">
+                <button id="btn-resume-run" class="primary" type="button">继续这一局</button>
+                <button id="btn-restart-run" class="ghost" type="button">重开本局</button>
+              </div>
+            </div>
+          </div>
           <div id="win-veil" hidden>
             <div class="win-card">
               <h3>整块盘切开了</h3>
@@ -136,7 +150,7 @@
           <span><i class="sw sw-cut"></i>分域笔记</span>
           <span><i class="sw sw-bad"></i>围不下了</span>
         </div>
-        <p class="keyhint"><b>拖动</b> 围一块 · <b>点击已围的格</b> 擦掉 · <b>画线</b> 模式点两格之间 · <b>H</b> 提示 · <b>Z</b> 撤销 · <b>M</b> 换模式</p>
+        <p class="keyhint"><b>拖动</b> 围一块 · <b>点击已围的格</b> 擦掉 · <b>画线</b> 模式点两格之间 · <b>H</b> 提示 · <b>Z</b> 撤销 · <b>K</b> 换模式 · <b>P</b> 暂停 · <b>R</b> 重开 · <b>M</b> 静音 · <b>F</b> 全屏 · <b>?</b> 教学</p>
       </aside>
     </section>
   </main>
@@ -145,6 +159,28 @@
     <span>每局唯一解 · 每局可用逻辑围到底 · 提示只给推得出的一步 — 由 <code>tools/verify.sh</code> 在真实浏览器里逐条断言。</span>
     <button id="btn-reset" class="link" type="button">清空存档</button>
   </footer>
+
+  <div id="help-veil" hidden role="dialog" aria-modal="true" aria-label="玩法教学">
+    <div class="help-card">
+      <h3>怎么玩</h3>
+      <p>把整块盘切成矩形。每块矩形里<b>恰好一个数字</b>，格数<b>恰好等于</b>那个数字；两块不能重叠，也不许留空格。</p>
+      <h4>三种手势</h4>
+      <ul>
+        <li><b>按住拖动</b>：从一格拖到对角格，松手围下这块矩形。</li>
+        <li><b>点已围的格</b>：擦掉那一笔，重新想过。</li>
+        <li><b>画线</b> 模式点两格之间的线：记一条"这两格不可能同域"的笔记，它不算落子。</li>
+      </ul>
+      <h4>键位</h4>
+      <ul class="keys">
+        <li><b>Enter</b> / <b>空格</b> 开局 · <b>P</b> 暂停 · <b>R</b> 重开本局 · <b>N</b> 再来一局</li>
+        <li><b>H</b> 提示 · <b>Z</b> 撤销 · <b>K</b> 换围块/画线 · <b>M</b> 静音 · <b>F</b> 全屏 · <b>?</b> 本页面</li>
+      </ul>
+      <p class="help-foot">提示只说当前推得出的那一步；每一局都唯一可解，也每一局都能靠逻辑围到底。</p>
+      <div class="win-actions">
+        <button id="btn-help-close" class="primary" type="button">知道了</button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <script type="module" src="js/main.js"></script>
