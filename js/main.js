@@ -255,6 +255,40 @@ function begin({ tier = 'trainee', seed = null, resume = null } = {}) {
   return game;
 }
 
+// 重开：**同一道题**从头再来 —— 标记、撤销栈、步数、提示次数、计时、结算遮罩全归零，
+// 但不换题。跟「换一局」的分工：换一局是重抽一道新题（那是"再来一局"），这里是
+// "这题我走错了，原地重来"——玩家要的是同一个题。
+//
+// 为什么不能只调一次 resetMarks() 就完事：它只碰得到引擎里的标记与 history，
+// UI 层的撤销栈、步数、提示次数都是各自独立存着的缓存，不挨个点名就会把半局的痕迹
+// 留在新局里（详见 Game.resetAll 的注释）。
+function restart() {
+  if (!game) return null;
+  game.resetAll();               // 标记 + steps + moves + hints + status + mode + lastHint
+  pulse = null;                  // 上一条提示留下的高亮，属于上一局
+  drag = null;                   // 上一次没画完的拖拽手势
+  el.winVeil.hidden = true;      // 结算遮罩收起：上一局赢了的遮罩不能压在重开后的盘上
+  baseElapsed = 0;               // 耗时归零
+  // 暂停中重开就保持停表，否则 startClock() 会把暂停期间憋下的墙钟一次性灌进计时。
+  if (paused) {
+    startedAt = 0;
+    clearInterval(ticker);
+    ticker = 0;
+  } else {
+    startClock();                // 没暂停就重新起跑，重开后的计时是这一局自己的
+  }
+  setMode('box');                // 临时态：操作模式回默认，HUD 的 aria-pressed 一起回写
+  el.hintRule.textContent = '提示理由';
+  el.hintLine.textContent = '按 提示 会说出当前能推的一步，以及它依据哪条规则。';
+  show('game');
+  syncAll();
+  // 存档覆盖成本局的空盘：刷新页面不会又冒出走错那半局的线。
+  // 特意**不**碰 Store 的偏好（静音 / 减动效 / 最好成绩）——那些是玩家的东西，不是这一局的东西。
+  flushResume();
+  renderResumeCard();
+  return game;
+}
+
 function show(which) {
   el.viewMenu.hidden = which !== 'menu';
   el.viewGame.hidden = which !== 'game';
@@ -433,6 +467,7 @@ $('#btn-mode-box').addEventListener('click', () => setMode('box'));
 $('#btn-mode-cut').addEventListener('click', () => setMode('cut'));
 $('#btn-hint').addEventListener('click', useHint);
 $('#btn-undo').addEventListener('click', undo);
+$('#btn-restart').addEventListener('click', restart);
 $('#btn-new').addEventListener('click', () => begin({ tier: game ? game.puzzle.tier : 'trainee' }));
 $('#btn-menu').addEventListener('click', () => {
   flushResume();
@@ -471,6 +506,9 @@ window.addEventListener('keydown', (ev) => {
   if (ev.key === 'h') useHint();
   else if (ev.key === 'z') undo();
   else if (ev.key === 'm') setMode(game && game.mode === 'cut' ? 'box' : 'cut');
+  // R 重开同一题，**局中就能按**（不只结算后）：玩家划到一半发现框错了，当场 R 一下重来。
+  // 本仓原先没有任何键占着 R（h/z/m 是玩法与模式，P 暂停，F 全屏，N 静音），所以不需要换键。
+  else if (ev.key === 'r' || ev.key === 'R') restart();
 });
 
 window.addEventListener('resize', draw);
@@ -491,6 +529,7 @@ window.shikaku = {
   },
   show,
   begin,
+  restart,
   useHint,
   undo,
   setMode,

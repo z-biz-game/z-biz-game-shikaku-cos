@@ -15,6 +15,7 @@ import {
   rebuild,
   snapshot,
   undo as undoState,
+  resetMarks,
   diagnose,
   nextDeduction,
   applyDeduction,
@@ -49,6 +50,24 @@ export class Game {
     this.mode = 'box';
     this.lastHint = null;
     this.recompute();
+  }
+
+  // 重开**同一道题**：把这一局整个归零，题面不动。
+  //
+  // 陷阱就在这里：引擎的 resetMarks() 只清了标记与引擎那份 history，而撤销栈
+  // this.steps、步数 this.moves、提示次数 this.hints 全挂在 UI 这一层的 Game 实例上，
+  // 它一个都碰不到。只调 resetMarks() 当重开，这半局的痕迹会原封不动当成新局开场白，
+  // 玩家还按得动撤销回到走错那一步（实测 steps 6 → 6、moves 6 → 6、hints 2 → 2）。
+  resetAll() {
+    resetMarks(this.st);      // 标记全回空 + 引擎 history 清空
+    this.steps = [];          // UI 撤销栈：resetMarks 管不到，清的是引擎那份
+    this.moves = 0;           // 步数归零
+    this.hints = 0;           // 提示次数归零：提示要收钱，留着等于让玩家白嫖上一局的帮助
+    this.status = 'playing';  // 胜负回判：上一局赢了也不能把重开后的盘算成已通关
+    this.mode = 'box';        // 临时态：操作模式回到默认
+    this.lastHint = null;     // 上一条提示文案属于上一局
+    this.recompute();
+    return this;
   }
 
   recompute() {
