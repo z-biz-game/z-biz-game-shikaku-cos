@@ -17,10 +17,22 @@
 <meta property="og:type" content="website" />
 <meta property="og:title" content="数间 · Shikaku 矩形分区推理" />
 <meta property="og:description" content="把整块盘切成矩形，每块围住一个数字、面积等于它。每局唯一解、每局都能用逻辑围到底。" />
-<meta property="og:image" content="icons/og.png" />
+<!-- og:image 要**绝对** URL：抓链的机器人不会拿页面地址去补相对路径，写相对的等于没社交卡。
+     发布地址就是 README 里那个 GitHub Pages，canonical/og:url 与它同源。 -->
+<meta property="og:image" content="https://z-biz-game.github.io/z-biz-game-shikaku-cos/icons/og.png" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta property="og:image:alt" content="数间：一张被矩形分开的数间盘，每个矩形围住面积等于它的数字" />
+<meta property="og:url" content="https://z-biz-game.github.io/z-biz-game-shikaku-cos/" />
 <meta property="og:locale" content="zh_CN" />
+<link rel="canonical" href="https://z-biz-game.github.io/z-biz-game-shikaku-cos/" />
 <meta name="twitter:card" content="summary_large_image" />
-<meta name="twitter:image" content="icons/og.png" />
+<meta name="twitter:image" content="https://z-biz-game.github.io/z-biz-game-shikaku-cos/icons/og.png" />
+<!-- 装到 iOS 主屏后的外壳：这三条缺任一个，display:standalone 就只是"看着像"独立应用——
+     状态栏照样压进来，标题还是文件名。状态栏压暗配 viewport-fit=cover + CSS 的 env() inset。 -->
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-title" content="数间" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <link rel="stylesheet" href="css/game.css" />
 </head>
 <body>

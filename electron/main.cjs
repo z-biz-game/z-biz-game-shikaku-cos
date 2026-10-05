@@ -11,6 +11,9 @@ function createWindow() {
     minHeight: 560,
     backgroundColor: '#080B16',
     title: '数间 Shikaku',
+    // 生成的 512² 真位图：不给 icon 的话 Windows 任务栏与 Linux 的 dock/alt-tab 挂的是
+    // Electron 的灰块图标，桌面端看起来就像没做完的脚手架。
+    icon: path.join(__dirname, '..', 'icons', 'icon-512.png'),
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
