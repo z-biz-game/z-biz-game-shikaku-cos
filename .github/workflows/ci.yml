@@ -34,6 +34,14 @@ jobs:
       - name: Engine tests
         run: node tools/engine-test.mjs
 
+      # 帧率无关性得仓自己带尺：官方探针 cos_frame_probe.js 用 vm.runInContext 执行 <script> 正文，
+      # 而本仓是 <script type="module"> + 真 import，它在装载期就 SyntaxError，报「结论：无法比对」——
+      # 那不是通过。所以这里跑仓内常驻闸：同一 LCG 随机流、同一串虚拟时长按 30/60/120Hz 喂 rAF，
+      # 按 sim 步号逐字段对拍粒子场；轴③ 缩时长必须变（防静止快照）；轴④ 粒子散场必须再清一次屏；
+      # 最后把 fx.js 的累加器 `accum += elapsed` 改成常量做阴性对照 —— 不打红就说明尺子空跑，闸自己先失败。
+      - name: Frame-rate parity (own ruler + negative control)
+        run: node tools/frame-parity.mjs
+
       # The ladder is a promise, not a caption: `TIERS[].band` is a selection target, and this
       # step goes red if a tier stops landing in its own band or the medians stop ordering.
       - name: Difficulty ladder is still measured
