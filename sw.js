@@ -9,22 +9,34 @@
 //    service workers are unavailable; registration is gated in js/main.js by protocol, and this
 //    file simply never runs there.
 
-const VERSION = 'shikaku-v1';
+const VERSION = 'shikaku-v2';
 const SHELL = `${VERSION}-shell`;
 const RUNTIME = `${VERSION}-runtime`;
 
 // The shell is what a cold offline start needs to reach the menu; the engine modules are
 // pulled in by the page itself and land in RUNTIME on first use.
+// 装到桌面/主屏那一次要读的位图全列上：漏一条，离线冷启时的安装条就用通用图标顶替
+// （Android 的富安装条读的正是 512 与 maskable-512，manifest 声明的 1024 也会被商店图标位
+// 请求）。og.png 不在其中——它是给社交爬虫抓的，运行中的应用永远不会请求它。
+const PRECACHE_BITMAPS = [
+  './icons/favicon-32.png',
+  './icons/favicon-48.png',
+  './icons/favicon-192.png',
+  './icons/apple-touch-icon.png',
+  './icons/icon-192.png',
+  './icons/icon-512.png',
+  './icons/icon-maskable-512.png',
+  './icons/icon-1024.png',
+  './assets/img/paper-256.png',
+  './assets/img/spark-64.png',
+];
+
 const PRECACHE = [
   './',
   './index.html',
   './css/game.css',
   './manifest.webmanifest',
-  './icons/favicon-32.png',
-  './icons/apple-touch-icon.png',
-  './icons/icon-192.png',
-  './assets/img/paper-256.png',
-  './assets/img/spark-64.png',
+  ...PRECACHE_BITMAPS,
 ];
 
 self.addEventListener('install', (ev) => {
