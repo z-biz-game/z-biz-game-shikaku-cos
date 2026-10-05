@@ -710,7 +710,9 @@ function frame(now) {
   lastFrame = now;
   const live = !el.viewGame.hidden && !paused && !helpOpen;
   if (live) fx.advance(dt);
-  if (fx.count || fx.ring.life) fx.render(el.fx.getContext('2d'), view.geo.dpr || 1);
+  // `fx.dirty` — not the live counts: on the frame the last particle dies there is nothing left
+  // to animate yet the canvas still holds the previous frame's pixels, and only render() clears.
+  if (fx.dirty) fx.render(el.fx.getContext('2d'), view.geo.dpr || 1);
   syncTelemetry();
 }
 

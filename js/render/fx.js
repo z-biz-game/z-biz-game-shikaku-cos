@@ -119,7 +119,13 @@ export class FxLayer {
       this.step(SIM_STEP);
     }
     if (steps === MAX_STEPS) this.accum = 0; // dropped the backlog rather than stalling
-    this.dirty = steps > 0 && (this.count > 0 || this.ring.life > 0);
+    if (steps > 0) {
+      const live = this.count > 0 || this.ring.life > 0;
+      // `|| this.dirty` is the death frame: the previous frame's particles are already pixels on
+      // the overlay canvas, and render()'s clearRect is the only thing that takes them off the
+      // screen. Follow the live count alone and the last drawn particle freezes there forever.
+      this.dirty = live || this.dirty;
+    }
     return steps;
   }
 
