@@ -115,7 +115,12 @@ export class BoardView {
     const rect = this.canvas.getBoundingClientRect();
     const { x, y } = this.geo;
     if (!this.geo.cell) return null;
-    return { x: clientX - rect.left - x, y: clientY - rect.top - y };
+    // rect 是**渲染后**的 CSS 像素，geo 是 JS 算出的**逻辑**像素；两者只在画布没被样式缩小时相等。
+    // 窄屏上 max-width、被挤的 flex 父级、iOS 视觉视口缩放都会让它俩错开，此时直接减 rect.left
+    // 会把命中一路往左上偏——点 A 打 B。按 渲染宽/逻辑宽 归一，1:1 时系数恒为 1，不改现有手感。
+    const sx = this.geo.w > 0 && rect.width > 0 ? rect.width / this.geo.w : 1;
+    const sy = this.geo.h > 0 && rect.height > 0 ? rect.height / this.geo.h : 1;
+    return { x: (clientX - rect.left) / sx - x, y: (clientY - rect.top) / sy - y };
   }
 
   draw(game, { pulse = null, preview = null, notes = true } = {}) {
