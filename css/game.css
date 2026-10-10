@@ -396,76 +396,68 @@ main { flex: 1; }
   .foot { flex-direction: column; align-items: flex-start; }
 }
 
-/* ---------- touch targets ---------- */
+/* 中央分发：safe-area 兜底 */
 
-/* 44px is the size a thumb actually hits, not a size that looks big in a mockup. Every
-   interactive thing gets the floor, including the text-style link buttons that would
-   otherwise sit at one line of copy. */
+/* ---------- safe-area：刘海与主屏条不吃掉按钮（中央分发，akari-cos 同口径） ---------- */
+:root {
+  --sat: env(safe-area-inset-top, 0px);
+  --sar: env(safe-area-inset-right, 0px);
+  --sab: env(safe-area-inset-bottom, 0px);
+  --sal: env(safe-area-inset-left, 0px);
+}
+html, body {
+  padding-left: var(--sal);
+  padding-right: var(--sar);
+}
+body {
+  padding-top: var(--sat);
+  padding-bottom: var(--sab);
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+/* 贴边的固定/吸底元素自己让开主屏条，别让 home indicator 压住按钮 */
+.fixed-bottom, .bottom-bar, .hud-bottom, footer.app-footer {
+  padding-bottom: calc(var(--sab) + env(safe-area-inset-bottom, 0px));
+}
+
+
+/* ============================================================
+   44px 触摸命中下限（Apple HIG 手机可用性底线）
+   每个真正可点的元素都要有 ≥44×44 CSS px 的命中盒。
+   min-height / min-width 是**硬下限**：只会把过小的盒子撑到 44px，
+   本来就够大的控件（宽药丸、整行列表项、大数字键）外形一点不变。
+
+   两处非平凡之处：
+   1) 需要 !important —— 各组件自己有 `.shelf button { min-width: 34px }`
+      这类更"贴身"的规则，类选择器的优先级高于任何标签堆叠，
+      不加的话这条底线会被组件规则逐个抵消。
+   2) 先把 --touch-min 定死：tapa / nurikabe 早就写了
+      `min-height: var(--touch-min)`，但全仓没有任何地方定义过这个变量，
+      无 fallback 的 var() 在计算值阶段整条作废 —— 那是个看着像 44px、
+      实际什么都不保证的死规则。这里补上定义，让它们原本的意图真正成立。
+   ============================================================ */
+:root { --touch-min: 44px; }
 button,
-.tier,
-.mode,
-.foot button.link {
-  min-height: 44px;
+select,
+input,
+textarea,
+a[href],
+[role="button"] {
+  min-height: 44px !important;
+  min-width: 44px !important;
 }
 
-.foot button.link { display: inline-flex; align-items: center; }
-
-.top-actions { flex-wrap: wrap; justify-content: flex-end; }
-
-@media (max-width: 700px) {
-  .topbar { flex-direction: column; align-items: flex-start; }
-  .top-actions { justify-content: flex-start; }
-}
-
-/* ---------- pause / teaching overlays ---------- */
-
-#pause-veil,
-#help-veil {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  background: rgba(8, 11, 22, 0.82);
-  border-radius: var(--radius-card);
-  animation: rise var(--dur-base) var(--ease-ease) both;
-}
-
-#help-veil {
-  position: fixed;
-  z-index: 5;
-  padding: var(--space-page);
-  border-radius: 0;
-}
-
-.pause-card,
-.help-card {
-  text-align: center;
-  padding: var(--space-card);
-  border: 1px solid var(--accent);
-  border-radius: var(--radius-card);
-  background: var(--surface-lift);
-  max-width: min(520px, 88%);
-}
-
-.help-card { text-align: left; }
-.pause-card h3, .help-card h3 { margin: 0 0 8px; font-size: 19px; }
-.pause-card p, .help-card p { margin: 0 0 8px; font-size: 13px; color: var(--ink-dim); }
-.pause-note { color: var(--ink-faint) !important; }
-.help-card h4 { margin: 14px 0 6px; font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-faint); }
-.help-card ul { margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.7; color: var(--ink-dim); }
-.help-card .keys li { list-style: none; margin-left: -18px; }
-.help-card b { color: var(--ink); }
-.help-foot { border-top: 1px solid var(--line); padding-top: var(--space-inner); }
-
-/* The OS asking for less motion is the floor: the in-game 动效 toggle can add to it, and this
-   block is what actually stops the transitions the canvas cannot see. */
-@media (prefers-reduced-motion: reduce) {
-  .view,
-  #win-veil,
-  #pause-veil,
-  #help-veil { animation: none; }
-  button,
-  .tier,
-  .mode { transition: none; }
-  button:active { transform: none; }
+/* ════════════════════════════════════════════════════════════════
+   线上实测（https://z-biz-game.github.io/z-biz-game-shikaku-cos/，CDP setDeviceMetricsOverride
+   dpr=3，读数在 _tmp-live-sweep-r19.log）：320×640 冷/热两腿都报 vw=394≠320——布局视口是被
+   页面自己撑宽的。.topbar 是 nowrap 的 space-between flex，左边 .brand 的 30px 标题、右边
+   .top-actions 那一行 290@104px 的按钮（每个都吃全局 min-height/min-width:44px 的触摸下限），
+   两栏在 320 上排不进一行，于是最右那枚 BTN#btn-fullscreen 46@348 整枚掉到屏幕外。（390 档也被撑到 394）
+   触摸下限不能撤（撤了就退回"手指点不中"那次修复），所以改让这一行会折：.topbar 允许换行、
+   .brand 允许收缩、.top-actions 自己也能折。竖向多占一行不是缺陷，横向出屏才是。
+   ════════════════════════════════════════════════════════════════ */
+@media (max-width: 420px) {
+  .topbar { flex-wrap: wrap; row-gap: 8px; }
+  .brand { min-width: 0; }
+  .top-actions { flex-wrap: wrap; row-gap: 6px; }
 }

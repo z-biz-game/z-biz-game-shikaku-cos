@@ -2,38 +2,18 @@
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" /><meta name="twitter:card" content="summary">
 <meta name="theme-color" content="#080B16" />
 <title>数间 · Shikaku 矩形分区推理</title>
-<meta name="description" content="Shikaku 数间谜题：把整块盘切成矩形，每块围住一个数字、面积等于它。每局唯一解、每局都能用逻辑围到底，提示只说推得出的那一步。" />
-<!-- Real bitmaps, produced by assets/gen/gen_assets.py. A data-URI SVG favicon cannot be
-     installed to a home screen or used as a store screenshot, and it left this repo with
-     zero PNGs ≥180px. The 192 link is what stops the browser probing the domain root. -->
-<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png" />
-<link rel="icon" type="image/png" sizes="48x48" href="icons/favicon-48.png" />
-<link rel="icon" type="image/png" sizes="192x192" href="icons/favicon-192.png" />
-<link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
-<link rel="manifest" href="manifest.webmanifest" />
-<meta property="og:type" content="website" />
-<meta property="og:title" content="数间 · Shikaku 矩形分区推理" />
-<meta property="og:description" content="把整块盘切成矩形，每块围住一个数字、面积等于它。每局唯一解、每局都能用逻辑围到底。" />
-<!-- og:image 要**绝对** URL：抓链的机器人不会拿页面地址去补相对路径，写相对的等于没社交卡。
-     发布地址就是 README 里那个 GitHub Pages，canonical/og:url 与它同源。 -->
-<meta property="og:image" content="https://z-biz-game.github.io/z-biz-game-shikaku-cos/icons/og.png" />
-<meta property="og:image:width" content="1200" />
-<meta property="og:image:height" content="630" />
-<meta property="og:image:alt" content="数间：一张被矩形分开的数间盘，每个矩形围住面积等于它的数字" />
-<meta property="og:url" content="https://z-biz-game.github.io/z-biz-game-shikaku-cos/" />
-<meta property="og:locale" content="zh_CN" />
-<link rel="canonical" href="https://z-biz-game.github.io/z-biz-game-shikaku-cos/" />
-<meta name="twitter:card" content="summary_large_image" />
-<meta name="twitter:image" content="https://z-biz-game.github.io/z-biz-game-shikaku-cos/icons/og.png" />
-<!-- 装到 iOS 主屏后的外壳：这三条缺任一个，display:standalone 就只是"看着像"独立应用——
-     状态栏照样压进来，标题还是文件名。状态栏压暗配 viewport-fit=cover + CSS 的 env() inset。 -->
-<meta name="apple-mobile-web-app-capable" content="yes" />
-<meta name="apple-mobile-web-app-title" content="数间" />
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="description" content="Shikaku 数间谜题：把整块盘切成矩形，每块围住一个数字、面积等于它。每局唯一解、每局都能用逻辑围到底，提示只说推得出的那一步。" /><meta property="og:title" content="数间 · Shikaku 矩形分区推理"><meta property="og:description" content="Shikaku 数间谜题：把整块盘切成矩形，每块围住一个数字、面积等于它。每局唯一解、每局都能用逻辑围到底，提示只说推得出的那一步。"><meta property="og:image" content="https://z-biz-game.github.io/z-biz-game-shikaku-cos/icons/icon-512.png"><meta name="twitter:image" content="https://z-biz-game.github.io/z-biz-game-shikaku-cos/icons/icon-512.png">
+<!-- Inline icon: without it the browser probes the Pages domain root for /favicon.ico and logs a 404. -->
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23080B16'/%3E%3Crect x='5' y='5' width='13' height='9' rx='2' fill='%232E4269' stroke='%23F2F5FB' stroke-width='1.6'/%3E%3Crect x='18' y='5' width='9' height='14' rx='2' fill='%231F5158' stroke='%23F2F5FB' stroke-width='1.6'/%3E%3Crect x='5' y='14' width='13' height='13' rx='2' fill='%2346356B' stroke='%23F2F5FB' stroke-width='1.6'/%3E%3C/svg%3E" />
 <link rel="stylesheet" href="css/game.css" />
+
+  <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="icons/favicon-16.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="manifest" href="manifest.webmanifest">
 </head>
 <body>
 <div id="app">
@@ -47,8 +27,9 @@
       <button id="btn-full" class="ghost" type="button" aria-pressed="false">全屏</button>
       <button id="btn-pause" class="ghost" type="button" aria-pressed="false" disabled>暂停</button>
       <button id="btn-notes" class="ghost" type="button" aria-pressed="true">笔记 显</button>
-      <button id="btn-sound" class="ghost" type="button" aria-pressed="true">音效 开</button>
+      <button id="btn-sound" class="ghost" type="button" aria-pressed="true" title="静音 / 恢复音效 · N">音效 开</button>
       <button id="btn-motion" class="ghost" type="button" aria-pressed="false">动效 全</button>
+      <button type="button" id="btn-pause" class="ghost" aria-pressed="false" title="暂停 (P)">暂停</button><button id="btn-fullscreen" class="ghost" type="button" aria-pressed="false" title="全屏（F）">全屏</button>
     </div>
   </header>
 
@@ -137,6 +118,7 @@
         <div class="acts">
           <button id="btn-hint" class="primary" type="button">提示<span class="mono" id="hint-count">0</span></button>
           <button id="btn-undo" class="ghost" type="button">撤销</button>
+          <button id="btn-restart" class="ghost" type="button" title="重开同一题：把这一局的标记与账本清空回到开局，题面不变（R）">重开本题</button>
           <button id="btn-new" class="ghost" type="button">换一局</button>
           <button id="btn-menu" class="ghost" type="button">回选档</button>
         </div>
@@ -197,5 +179,6 @@
 </div>
 
 <script type="module" src="js/main.js"></script>
+  <script src="js/sw-register.js"></script>
 </body>
 </html>
