@@ -31,11 +31,21 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const ASSEMBLE = 'tools/assemble-site.sh';
 // R 段实际检查的路径条数。改页面/清单会改变它——那正是要它变的时候；没改页面却掉了，
 // 说明引用解析不出来的那部分被悄悄放过了。对着 DEPLOY_SET_DUMP=1 的出处表能逐条核。
-const EXPECT_CHECKS = 27;
+// 【实数钉 · 并线收口这一轮】27 → 46：并线把页面另一侧的资源接了回来（中央分发那套图标、
+// og-image 社交卡与 assets/textures 的位图），R 段因此多解析出 19 条引用。
+// 【实数钉 · 同一轮的第二刀】46 → 45：service worker 的注册原来有两份（main.js 里一份、
+// js/sw-register.js 里一份），收口时删掉 main.js 那份 ⇒ 少一条被扫到的引用
+// （`new URL('sw.js', document.baseURI)`）。sw.js 本身仍被 js/sw-register.js 的
+// `serviceWorker.register('sw.js', …)` 指着，产物里缺它照样红。
+// 钉的是**实数**，强度不变：R12 这条断言本身没动，它照样在「少一条就红」的方向上咬人。
+const EXPECT_CHECKS = 45;
 // 全绿时这个闸实际跑的断言条数（W/R/P 三段之和）。钉住它，「少一条断言」就不可能是绿的：
 // 删掉 manifest 里的一张图标会同时少一条 R10 与那张的 P1/P2 两行——那条路径缺文件本来就该红，
 // 但 rows 能漂就是闸在缩水的信号，所以两个数一起钉。
-const EXPECT_ROWS = 46;
+// 【实数钉 · 并线收口这一轮】46 → 65：理由同上（引用条数变多 ⇒ R10 与位图 P1/P2 一起变多）。
+// 【实数钉 · 同一轮的第二刀】65 → 64：少一条引用 ⇒ 少一条 R10 ⇒ 断言条数跟着少一条。
+// 钉的是**实数**，强度不变。
+const EXPECT_ROWS = 64;
 
 let rows = 0;
 const fails = [];

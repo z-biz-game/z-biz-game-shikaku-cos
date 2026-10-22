@@ -5,6 +5,8 @@
 let ctx = null;
 let master = null;
 let enabled = true;
+// paused: the context is suspended and nothing may be scheduled into it.
+let held = false;
 // 静音偏好：读回存档。放在模块顶层，这样每次 init（首屏、开局、重开）都拿到同一个答案，
 // 重开一局不会把玩家的静音选择洗掉。
 try {

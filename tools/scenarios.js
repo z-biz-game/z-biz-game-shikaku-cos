@@ -336,6 +336,13 @@
     eq('换一局清零步数', text('#stat-moves'), '0');
     eq('换一局清零提示', text('#stat-hints'), '0');
     ck('换一局关掉遮罩', !shown('#win-veil'));
+    // 换局之后先真落一子。暂停段要咬住「这一局有花费」，而「换一局清零步数」之后盘上
+    // 一分花费都没有，提示又不计步 —— 不补这一步，那条断言自己跟自己打架。
+    const firstRegion = A().game.puzzle.partition[0];
+    A().drawBox(firstRegion.r0, firstRegion.c0, firstRegion.r1, firstRegion.c1);
+    await wait(40);
+    eq('落子后步数进一', text('#stat-moves'), '1');
+    ck('落子后围下一块', ownedCount() > 0, ownedCount());
     $('#btn-menu').click();
     await wait(40);
     ck('回选档显示菜单', shown('#view-menu'));
@@ -344,6 +351,7 @@
     $('#btn-resume').click();
     await wait(60);
     ck('继续回到棋局', shown('#view-game'));
+    eq('继续带回刚才那一步', A().state().moves, 1);
 
     // ---- 暂停：真的停钟、真的挂起设备、恢复不丢状态 ----
     const beforePause = A().state();
@@ -388,6 +396,7 @@
     await wait(40);
     eq('再按 M 恢复音效', A().soundState().enabled, soundWas);
     ck('全屏按钮真实存在', !!$('#btn-full'));
+    ck('全屏按钮写了按下态', $('#btn-full').getAttribute('aria-pressed') === 'false');
     window.dispatchEvent(new KeyboardEvent('keydown', { key: '?', bubbles: true }));
     await wait(60);
     ck('? 键开教学浮层', shown('#help-veil'));
